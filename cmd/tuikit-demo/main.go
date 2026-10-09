@@ -84,6 +84,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			tuikit.Bool("start", "Démarrer").Default(true),
 		)
 		m.modal = tuikit.NewModal("Nouveau dossier", c)
+	case "r":
+		c = tuikit.NewForm("note",
+			tuikit.Text("title", "Titre").Required(),
+			tuikit.Refs("refs", "Réfs", complete).Required().Help("entrée ou virgule ajoute, ⌫ retire la dernière"),
+			tuikit.TextArea("body", "Note"),
+		)
+		m.modal = tuikit.NewModal("Nouvelle note", c)
 	case "e":
 		m.modal = tuikit.NewModal("Clôture de P-0049", tuikit.NewEditor("result", "Résultat", ""))
 	case "o":
@@ -98,7 +105,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() tea.View {
-	lines := []string{"tuikit-demo : c échéance · n dossier · e éditeur · o Oui/Non · d suppression · q quitter", ""}
+	lines := []string{"tuikit-demo : c échéance · n dossier · r note · e éditeur · o Oui/Non · d suppression · q quitter", ""}
 	lines = append(lines, m.log...)
 	v := tea.NewView(tuikit.Overlay(strings.Join(lines, "\n"), m.modal, m.width, m.height))
 	v.AltScreen = true

@@ -19,6 +19,7 @@ type value struct {
 	at        time.Time
 	duration  time.Duration
 	durations []time.Duration
+	strings   []string
 }
 
 func (v Values) get(id string) value {
@@ -64,6 +65,9 @@ func (v Values) Duration(id string) time.Duration { return v.get(id).duration }
 
 // Durations is the value of a Durations field.
 func (v Values) Durations(id string) []time.Duration { return v.get(id).durations }
+
+// Strings are the values of a Refs field.
+func (v Values) Strings(id string) []string { return v.get(id).strings }
 
 // Errors are messages shown under fields, by field id.
 type Errors map[string]string

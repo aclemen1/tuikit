@@ -3,6 +3,7 @@ package tuikit
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -478,5 +479,84 @@ func TestOverlayCentres(t *testing.T) {
 	m.open = false
 	if Overlay(base, m, 100, 30) != base {
 		t.Fatal("closed modal changed the view")
+	}
+}
+
+func refsForm() *Form {
+	return NewForm("note",
+		Refs("refs", "Réfs", func(q string) []Item {
+			var out []Item
+			for _, it := range refs {
+				if strings.Contains(strings.ToLower(it.Value), strings.ToLower(q)) {
+					out = append(out, it)
+				}
+			}
+			return out
+		}).Required(),
+		Text("t", "Titre"),
+	)
+}
+
+func TestRefsAddRemove(t *testing.T) {
+	f := refsForm()
+	h := open(t, "Nouvelle note", f)
+	h.press("ctrl+s")
+	if !strings.Contains(h.view(), "! obligatoire") {
+		t.Fatal("Refs required accepted no value")
+	}
+	h.typ("0019")
+	h.press("enter")
+	if f.current().id != "refs" || !slices.Equal(f.Field("refs").items, []string{"P-0019"}) {
+		t.Fatalf("enter did not add: %v", f.Field("refs").items)
+	}
+	h.typ("pt-")
+	h.press("down")
+	h.typ(",")
+	h.typ("office:P-0019,")
+	if got := f.Field("refs").items; !slices.Equal(got, []string{"P-0019", "PT-0007", "office:P-0019"}) {
+		t.Fatalf("items = %v", got)
+	}
+	h.press("backspace")
+	if got := f.Field("refs").items; !slices.Equal(got, []string{"P-0019", "PT-0007"}) {
+		t.Fatalf("backspace on empty entry: %v", got)
+	}
+	h.typ("0040")
+	if v := h.view(); strings.Contains(v, "› P-0019") || !strings.Contains(v, "[P-0019]") {
+		t.Fatalf("chosen value proposed again or not shown:\n%s", v)
+	}
+	h.press("enter", "enter")
+	if f.current().id != "t" {
+		t.Fatal("enter on an empty entry did not go on")
+	}
+	h.press("ctrl+s")
+	if got := h.done().Values.Strings("refs"); !slices.Equal(got, []string{"P-0019", "PT-0007", "P-0040"}) {
+		t.Fatalf("Strings = %v", got)
+	}
+}
+
+func TestRefsDefaultAndPaste(t *testing.T) {
+	f := NewForm("n", Refs("r", "Réfs", nil).Default([]string{"task:PT-0007", "office:P-0051"}))
+	h := open(t, "x", f)
+	h.send(tea.PasteMsg{Content: "due:PE-0001, office:P-0051\nnote:N-1, mnemo:"})
+	if got := f.Field("r").items; !slices.Equal(got, []string{"task:PT-0007", "office:P-0051", "due:PE-0001", "note:N-1"}) {
+		t.Fatalf("items = %v", got)
+	}
+	if f.Field("r").in.Value() != "mnemo:" {
+		t.Fatalf("entry = %q", f.Field("r").in.Value())
+	}
+	h.press("ctrl+s")
+	v := h.done().Values
+	if got := v.Strings("r"); len(got) != 5 || got[4] != "mnemo:" {
+		t.Fatalf("Strings = %v", got)
+	}
+	if v.String("r") != "task:PT-0007,office:P-0051,due:PE-0001,note:N-1,mnemo:" {
+		t.Fatalf("String = %q", v.String("r"))
+	}
+}
+
+func TestRequiredLabelKeepsGap(t *testing.T) {
+	h := open(t, "x", NewForm("f", Text("t", "Titre").Required().Default("Rappel")))
+	if !strings.Contains(h.view(), "Titre *  Rappel") {
+		t.Fatalf("no gap after the label:\n%s", h.view())
 	}
 }

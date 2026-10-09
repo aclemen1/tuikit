@@ -69,12 +69,13 @@ func (m model) View() tea.View {
 | `Duration(id, libellé)` | 1h30, 45min, 3j, 2sem | `Duration` |
 | `Durations(id, libellé)` | « 30d, 7d, 1d » | `Durations`, `String` (30d,7d,1d) |
 | `Ref(id, libellé, completer)` | complétion, ↑↓ et entrée | `String` |
+| `Refs(id, libellé, completer)` | plusieurs valeurs complétées ; entrée ou virgule ajoute, ⌫ sur entrée vide retire la dernière | `Strings`, `String` (a,b) |
 
 Modificateurs : `.Required()`, `.Help(s)`, `.Placeholder(s)`, `.Default(v)`
-(string, bool, time.Time, when.Moment, time.Duration, []time.Duration),
+(string, bool, time.Time, when.Moment, time.Duration, []time.Duration, []string),
 `.Clock("09:00")` (heure d'une date seule), `.From(idDate)` (aperçu des dates
 d'un préavis), `.ShowIf(id, valeurs...)`, `.Strict()` (Ref limitée aux
-propositions). Formulaire : `.Validate(func(Values) Errors)`, `.Now(func() time.Time)`.
+propositions). Un `Refs` obligatoire exige au moins une valeur. Formulaire : `.Validate(func(Values) Errors)`, `.Now(func() time.Time)`.
 
 Un `Choice` obligatoire sans `Default` démarre sans présélection ; un champ
 masqué par `ShowIf` n'a pas de valeur.

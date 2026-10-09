@@ -65,7 +65,7 @@ func (f *Form) labelWidth() int {
 	for _, x := range f.fields {
 		w = max(w, lipgloss.Width(x.label))
 	}
-	return w + 4
+	return w + 6
 }
 
 func (f *Form) valueWidth() int { return max(f.width-f.labelWidth(), 10) }
@@ -130,12 +130,16 @@ func (f *Form) Update(msg tea.Msg) (Action, tea.Cmd) {
 			cmd = f.move(1)
 		case ks == "shift+tab":
 			cmd = f.move(-1)
+		case ks == "enter" && x.kind == kRefs:
+			if !x.commit() {
+				cmd = f.move(1)
+			}
 		case ks == "enter" && x.kind != kTextArea:
 			if x.kind == kRef {
 				x.accept()
 			}
 			cmd = f.move(1)
-		case (ks == "up" || ks == "down") && x.kind == kRef && (x.suggOpen || ks == "down"):
+		case (ks == "up" || ks == "down") && (x.kind == kRef || x.kind == kRefs) && (x.suggOpen || ks == "down"):
 			x.navigate(ks)
 		case (ks == "up" || ks == "down") && x.kind != kTextArea:
 			cmd = f.move(map[string]int{"up": -1, "down": 1}[ks])
@@ -158,7 +162,7 @@ func (x *Field) navigate(ks string) {
 	}
 	if !x.suggOpen {
 		q := strings.TrimSpace(x.in.Value())
-		x.sugg = x.complete(q)
+		x.sugg = x.proposals(q)
 		if len(x.sugg) > maxSuggestions {
 			x.sugg = x.sugg[:maxSuggestions]
 		}
@@ -249,6 +253,12 @@ func (f *Form) fieldLines(x *Field, focused bool, now time.Time) []string {
 	vw := f.valueWidth()
 	var lines []string
 	switch {
+	case x.kind == kRefs:
+		var chips []string
+		for _, it := range x.items {
+			chips = append(chips, sChosen.Render("["+it+"]"))
+		}
+		lines = append(lines, wrapText(strings.Join(append(chips, x.in.View()), " "), vw))
 	case x.textual():
 		lines = append(lines, x.in.View())
 	case x.kind == kTextArea:
@@ -267,13 +277,13 @@ func (f *Form) fieldLines(x *Field, focused bool, now time.Time) []string {
 	}
 	raw := strings.TrimSpace(x.current())
 	if raw != "" && x.err == "" {
-		if _, _, err := x.parse(now); err != nil && x.kind != kRef {
+		if _, _, err := x.parse(now); err != nil && x.kind != kRef && x.kind != kRefs {
 			lines = append(lines, sError.Render(wrapText(err.Error(), vw)))
 		} else if r := f.reading(x, now); r != "" {
 			lines = append(lines, sOK.Render(truncate("→ "+r, vw)))
 		}
 	}
-	if x.kind == kRef && focused && x.suggOpen {
+	if (x.kind == kRef || x.kind == kRefs) && focused && x.suggOpen {
 		for i, it := range x.sugg {
 			label := it.Value
 			if it.Label != "" && it.Label != it.Value {

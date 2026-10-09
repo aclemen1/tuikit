@@ -24,6 +24,7 @@ const (
 	kDuration
 	kDurations
 	kRef
+	kRefs
 )
 
 // Item is a proposal of a Completer: Value goes into the field, Label is shown.
@@ -56,6 +57,7 @@ type Field struct {
 	sugg     []Item
 	sel      int
 	suggOpen bool
+	items    []string
 	err      string
 }
 
@@ -102,7 +104,15 @@ func Ref(id, label string, complete Completer) *Field {
 	return f
 }
 
-// Required refuses an empty field at validation.
+// Refs is a list of references, each completed as in Ref: enter or a comma
+// adds the value typed, backspace on an empty entry removes the last one.
+func Refs(id, label string, complete Completer) *Field {
+	f := newField(kRefs, id, label)
+	f.complete = complete
+	return f
+}
+
+// Required refuses an empty field at validation; a Refs needs one value.
 func (f *Field) Required() *Field { f.required = true; return f }
 
 // Help is the line shown under the field.
@@ -113,7 +123,7 @@ func (f *Field) Placeholder(s string) *Field { f.placeholder = s; return f }
 
 // Default prefills the field: a string for any field, a bool for a Bool, a
 // time.Time or a when.Moment for a Date, a time.Duration for a Duration, a
-// []time.Duration for Durations.
+// []time.Duration for Durations, a []string for Refs.
 func (f *Field) Default(v any) *Field { f.def = v; return f }
 
 // Clock is the time a Date takes when typed without one (15:04).
@@ -134,7 +144,7 @@ func (f *Field) ShowIf(id string, values ...string) *Field {
 
 func (f *Field) textual() bool {
 	switch f.kind {
-	case kText, kDate, kClock, kDuration, kDurations, kRef:
+	case kText, kDate, kClock, kDuration, kDurations, kRef, kRefs:
 		return true
 	}
 	return false
@@ -166,6 +176,16 @@ func (f *Field) init(form *Form) {
 			parts[i] = when.FormatDuration(x)
 		}
 		raw = strings.Join(parts, ", ")
+	case []string:
+		for _, x := range d {
+			f.add(x)
+		}
+	}
+	if f.kind == kRefs && raw != "" {
+		for x := range strings.SplitSeq(raw, ",") {
+			f.add(x)
+		}
+		raw = ""
 	}
 	switch {
 	case f.textual():
@@ -191,6 +211,12 @@ func (f *Field) init(form *Form) {
 // current is the state of the field as text, for ShowIf and change detection.
 func (f *Field) current() string {
 	switch {
+	case f.kind == kRefs:
+		all := slices.Clone(f.items)
+		if s := strings.TrimSpace(f.in.Value()); s != "" {
+			all = append(all, s)
+		}
+		return strings.Join(all, ", ")
 	case f.textual():
 		return f.in.Value()
 	case f.kind == kTextArea:
@@ -271,6 +297,16 @@ func (f *Field) parse(now time.Time) (v value, has bool, err error) {
 		if f.strict && !f.proposes(raw) {
 			return value{}, false, fmt.Errorf("%q n'est pas proposé", raw)
 		}
+	case kRefs:
+		all := strings.Split(raw, ", ")
+		if f.strict {
+			for _, x := range all {
+				if !f.proposes(x) {
+					return value{}, false, fmt.Errorf("%q n'est pas proposé", x)
+				}
+			}
+		}
+		return value{raw: strings.Join(all, ","), strings: all}, true, nil
 	}
 	return value{raw: raw}, true, nil
 }
@@ -292,7 +328,7 @@ func (f *Field) refreshSuggestions() {
 		return
 	}
 	q := strings.TrimSpace(f.in.Value())
-	f.sugg = f.complete(q)
+	f.sugg = f.proposals(q)
 	if len(f.sugg) > maxSuggestions {
 		f.sugg = f.sugg[:maxSuggestions]
 	}
@@ -301,6 +337,41 @@ func (f *Field) refreshSuggestions() {
 	if f.suggOpen {
 		f.sel = 0
 	}
+}
+
+// proposals are the completer's items for q, less the values a Refs holds.
+func (f *Field) proposals(q string) []Item {
+	var out []Item
+	for _, it := range f.complete(q) {
+		if !slices.Contains(f.items, it.Value) {
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
+// add appends a value to a Refs, once.
+func (f *Field) add(v string) {
+	v = strings.TrimSpace(v)
+	if v != "" && !slices.Contains(f.items, v) {
+		f.items = append(f.items, v)
+	}
+}
+
+// commit adds to a Refs the chosen suggestion, or else the text typed; it
+// tells whether there was anything to add.
+func (f *Field) commit() bool {
+	v := strings.TrimSpace(f.in.Value())
+	if f.suggOpen && f.sel >= 0 && f.sel < len(f.sugg) {
+		v = f.sugg[f.sel].Value
+	}
+	f.suggOpen, f.sel = false, -1
+	if v == "" {
+		return false
+	}
+	f.add(v)
+	f.in.SetValue("")
+	return true
 }
 
 func (f *Field) accept() {
@@ -395,10 +466,36 @@ func (f *Field) update(msg tea.Msg, now time.Time) tea.Cmd {
 			return nil
 		}
 	}
+	if f.kind == kRefs {
+		switch msg := msg.(type) {
+		case tea.KeyPressMsg:
+			switch {
+			case msg.Text == ",":
+				f.commit()
+				return nil
+			case msg.Keystroke() == "backspace" && f.in.Value() == "" && len(f.items) > 0:
+				f.items = f.items[:len(f.items)-1]
+				return nil
+			}
+		case tea.PasteMsg:
+			parts := strings.FieldsFunc(msg.Content, func(r rune) bool { return r == ',' || r == '\n' })
+			last := ""
+			if n := len(parts); n > 0 && !strings.ContainsAny(msg.Content[len(msg.Content)-1:], ",\n") {
+				last, parts = parts[n-1], parts[:n-1]
+			}
+			for _, p := range parts {
+				f.add(p)
+			}
+			f.in.SetValue(f.in.Value() + strings.TrimSpace(last))
+			f.in.CursorEnd()
+			f.refreshSuggestions()
+			return nil
+		}
+	}
 	before := f.in.Value()
 	var cmd tea.Cmd
 	f.in, cmd = f.in.Update(msg)
-	if f.kind == kRef && f.in.Value() != before {
+	if (f.kind == kRef || f.kind == kRefs) && f.in.Value() != before {
 		f.refreshSuggestions()
 	}
 	return cmd
@@ -437,6 +534,8 @@ func (f *Field) keys() string {
 		return "espace cocher"
 	case kRef:
 		return "↑↓ suggestions · entrée choisir"
+	case kRefs:
+		return "↑↓ suggestions · entrée ou virgule ajouter · ⌫ retirer"
 	}
 	return "entrée suivant"
 }
