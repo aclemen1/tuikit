@@ -2,6 +2,7 @@ package when
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -232,5 +233,61 @@ func TestHorizon(t *testing.T) {
 	got, err = Horizon("12.11", now(t), "09:00")
 	if err != nil || got.Format("2006-01-02 15:04:05") != "2026-11-12 23:59:59" {
 		t.Errorf("Horizon(12.11) = %v, %v", got, err)
+	}
+}
+
+func TestParseEnglish(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"yesterday", "2026-10-08"},
+		{"tomorrow at 3pm", "2026-10-10T15:00"},
+		{"friday", "2026-10-16"},
+		{"next friday", "2026-10-16"},
+		{"this friday", "2026-10-09"},
+		{"Mon 10:00", "2026-10-12T10:00"},
+		{"next week", "2026-10-12"},
+		{"next month", "2026-11-01"},
+		{"end of month", "2026-10-31"},
+		{"in 3 days", "2026-10-12"},
+		{"in 2 weeks", "2026-10-23"},
+		{"in 2 months", "2026-12-09"},
+		{"in 2 hours", "2026-10-09T19:37"},
+		{"november 12", "2026-11-12"},
+		{"Nov 12, 2027", "2027-11-12"},
+		{"12th november", "2026-11-12"},
+		{"at noon", "2026-10-10T12:00"},
+		{"9:30am", "2026-10-10T09:30"},
+		{"12am", "2026-10-10T00:00"},
+		{"12pm", "2026-10-10T12:00"},
+	}
+	for _, c := range cases {
+		m, err := Parse(c.in, now(t))
+		if err != nil {
+			t.Errorf("Parse(%q): %v", c.in, err)
+			continue
+		}
+		if m.String() != c.want {
+			t.Errorf("Parse(%q) = %s, want %s", c.in, m, c.want)
+		}
+	}
+	if _, err := ParseClock("13pm"); err == nil {
+		t.Error("ParseClock(13pm) accepted")
+	}
+}
+
+func TestEnglishOutput(t *testing.T) {
+	SetLanguage(English)
+	defer SetLanguage(French)
+	m, _ := Parse("31.03.2027", now(t))
+	if got := Describe(m, now(t), "09:00"); got != "Wed 31.03.2027 (09:00) · in 173 days" {
+		t.Errorf("Describe = %q", got)
+	}
+	if got := Words(14 * day); got != "2 weeks" {
+		t.Errorf("Words = %q", got)
+	}
+	if got := Until(now(t).AddDate(0, 0, -3), now(t)); got != "3 days ago" {
+		t.Errorf("Until = %q", got)
+	}
+	if _, err := Parse("soon", now(t)); err == nil || !strings.Contains(err.Error(), "unreadable") {
+		t.Errorf("error = %v", err)
 	}
 }

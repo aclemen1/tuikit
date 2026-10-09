@@ -12,6 +12,27 @@ import (
 	"time"
 )
 
+// Language is the language of the texts written back: readings, durations
+// in words, errors. Input is read in French and in English whatever it is.
+type Language int
+
+const (
+	French Language = iota
+	English
+)
+
+var lang = French
+
+// SetLanguage picks the language of the texts written back; French by default.
+func SetLanguage(l Language) { lang = l }
+
+func tr(fr, en string) string {
+	if lang == English {
+		return en
+	}
+	return fr
+}
+
 // ErrEmpty is returned for a blank input.
 var ErrEmpty = errors.New("vide")
 
@@ -66,23 +87,40 @@ func fold(s string) string {
 }
 
 var clockRe = regexp.MustCompile(`^(\d{1,2})(?:h(\d{2})?|:(\d{2}))$`)
+var meridiemRe = regexp.MustCompile(`^(\d{1,2})(?::(\d{2}))?(am|pm)$`)
 
-// ParseClock reads a time of day: 14h30, 14h, 14:30, 9:05, midi, minuit.
+// ParseClock reads a time of day: 14h30, 14h, 14:30, 9:05, midi, minuit,
+// noon, midnight, 3pm, 9:30am.
 // It returns 15:04.
 func ParseClock(s string) (string, error) {
 	f := fold(s)
 	switch f {
 	case "":
 		return "", ErrEmpty
-	case "midi":
+	case "midi", "noon":
 		return "12:00", nil
-	case "minuit":
+	case "minuit", "midnight":
 		return "00:00", nil
 	}
 	f = strings.ReplaceAll(f, " ", "")
+	if m := meridiemRe.FindStringSubmatch(f); m != nil {
+		h, _ := strconv.Atoi(m[1])
+		mi := 0
+		if m[2] != "" {
+			mi, _ = strconv.Atoi(m[2])
+		}
+		if h < 1 || h > 12 || mi > 59 {
+			return "", fmt.Errorf(tr("heure %q hors de 00:00–23:59", "time %q out of 00:00–23:59"), s)
+		}
+		h %= 12
+		if m[3] == "pm" {
+			h += 12
+		}
+		return fmt.Sprintf("%02d:%02d", h, mi), nil
+	}
 	m := clockRe.FindStringSubmatch(f)
 	if m == nil {
-		return "", fmt.Errorf("heure %q illisible : essayez 14h30 ou 14:30", s)
+		return "", fmt.Errorf(tr("heure %q illisible : essayez 14h30 ou 14:30", "time %q unreadable: try 14:30 or 2:30pm"), s)
 	}
 	h, _ := strconv.Atoi(m[1])
 	mi := 0
@@ -93,7 +131,7 @@ func ParseClock(s string) (string, error) {
 		mi, _ = strconv.Atoi(m[3])
 	}
 	if h > 23 || mi > 59 {
-		return "", fmt.Errorf("heure %q hors de 00:00–23:59", s)
+		return "", fmt.Errorf(tr("heure %q hors de 00:00–23:59", "time %q out of 00:00–23:59"), s)
 	}
 	return fmt.Sprintf("%02d:%02d", h, mi), nil
 }
@@ -102,9 +140,14 @@ const day = 24 * time.Hour
 
 var unitNames = map[string]time.Duration{
 	"min": time.Minute, "mn": time.Minute, "minute": time.Minute, "minutes": time.Minute,
-	"h": time.Hour, "heure": time.Hour, "heures": time.Hour,
+	"mins": time.Minute,
+	"h":    time.Hour, "heure": time.Hour, "heures": time.Hour, "hr": time.Hour, "hrs": time.Hour, "hour": time.Hour, "hours": time.Hour,
 	"j": day, "d": day, "jour": day, "jours": day, "day": day, "days": day,
 	"w": 7 * day, "sem": 7 * day, "semaine": 7 * day, "semaines": 7 * day, "week": 7 * day, "weeks": 7 * day,
+}
+
+func durationError(s string) error {
+	return fmt.Errorf(tr("durée %q illisible : essayez 1h30, 45min, 3j ou 2sem", "duration %q unreadable: try 1h30, 45min, 3d or 2w"), s)
 }
 
 var amountRe = regexp.MustCompile(`^(\d+)\s*([a-z]*)\.?\s*`)
@@ -122,7 +165,7 @@ func ParseDuration(s string) (time.Duration, error) {
 	for rest != "" {
 		m := amountRe.FindStringSubmatch(rest)
 		if m == nil {
-			return 0, fmt.Errorf("durée %q illisible : essayez 1h30, 45min, 3j ou 2sem", s)
+			return 0, durationError(s)
 		}
 		n, _ := strconv.Atoi(m[1])
 		unit, ok := unitNames[m[2]]
@@ -130,7 +173,7 @@ func ParseDuration(s string) (time.Duration, error) {
 		case m[2] == "" && last == time.Hour:
 			unit, ok = time.Minute, true
 		case !ok:
-			return 0, fmt.Errorf("durée %q illisible : essayez 1h30, 45min, 3j ou 2sem", s)
+			return 0, durationError(s)
 		}
 		total += time.Duration(n) * unit
 		last = unit
@@ -173,13 +216,14 @@ func FormatDuration(d time.Duration) string {
 	}
 }
 
-// Words writes d in French words: « 2 jours », « 1 h 30 », « 45 min ».
+// Words writes d in words: « 2 jours », « 1 h 30 », « 45 min » (« 2 days »
+// in English).
 func Words(d time.Duration) string {
 	switch {
 	case d%(7*day) == 0 && d >= 7*day:
-		return plural(int(d/(7*day)), "semaine", "semaines")
+		return plural(int(d/(7*day)), tr("semaine", "week"), tr("semaines", "weeks"))
 	case d%day == 0 && d >= day:
-		return plural(int(d/day), "jour", "jours")
+		return plural(int(d/day), tr("jour", "day"), tr("jours", "days"))
 	case d < time.Hour:
 		return fmt.Sprintf("%d min", d/time.Minute)
 	case d%time.Hour == 0:
@@ -214,7 +258,7 @@ func BeforeBy(t time.Time, d time.Duration) time.Time {
 	return t.Add(-d)
 }
 
-var monthRe = regexp.MustCompile(`^(\d+)\s*(mois|ans?|annees?|y)$`)
+var monthRe = regexp.MustCompile(`^(\d+)\s*(mois|months?|ans?|annees?|years?|y)$`)
 
 // delay reads « +3j », « dans 2 semaines », « 3d », « +1h30 », « dans 2 mois ».
 // A bare amount needs a unit that is not an hour, so that « 14h » stays a clock.
@@ -225,10 +269,12 @@ func delay(f string, now time.Time) (Moment, bool) {
 		rest, prefixed = strings.TrimSpace(rest[1:]), true
 	case strings.HasPrefix(rest, "dans "):
 		rest, prefixed = rest[len("dans "):], true
+	case strings.HasPrefix(rest, "in "):
+		rest, prefixed = rest[len("in "):], true
 	}
 	if m := monthRe.FindStringSubmatch(rest); m != nil {
 		n, _ := strconv.Atoi(m[1])
-		if m[2] == "mois" {
+		if strings.HasPrefix(m[2], "mo") {
 			return dateOnly(now.AddDate(0, n, 0)), true
 		}
 		return dateOnly(now.AddDate(n, 0, 0)), true
@@ -255,6 +301,13 @@ var weekdayNames = map[string]time.Weekday{
 	"jeudi": time.Thursday, "jeu": time.Thursday,
 	"vendredi": time.Friday, "ven": time.Friday,
 	"samedi": time.Saturday, "sam": time.Saturday,
+	"sunday": time.Sunday, "sun": time.Sunday,
+	"monday": time.Monday, "mon": time.Monday,
+	"tuesday": time.Tuesday, "tue": time.Tuesday,
+	"wednesday": time.Wednesday, "wed": time.Wednesday,
+	"thursday": time.Thursday, "thu": time.Thursday,
+	"friday": time.Friday, "fri": time.Friday,
+	"saturday": time.Saturday, "sat": time.Saturday,
 }
 
 var monthNames = map[string]time.Month{
@@ -270,6 +323,9 @@ var monthNames = map[string]time.Month{
 	"octobre": 10, "oct": 10,
 	"novembre": 11, "nov": 11,
 	"decembre": 12, "dec": 12,
+	"january": 1, "february": 2, "feb": 2, "march": 3, "april": 4, "apr": 4, "may": 5,
+	"june": 6, "jun": 6, "july": 7, "jul": 7, "august": 8, "aug": 8,
+	"september": 9, "october": 10, "november": 11, "december": 12,
 }
 
 // nextWeekday is the first wd strictly after today, or from today on when
@@ -283,7 +339,8 @@ func nextWeekday(now time.Time, wd time.Weekday, inclusive bool) time.Time {
 }
 
 var numDateRe = regexp.MustCompile(`^(\d{1,2})[./](\d{1,2})(?:[./](\d{2}|\d{4}))?\.?$`)
-var nameDateRe = regexp.MustCompile(`^(\d{1,2})(?:er)? ([a-z]+)\.?(?: (\d{4}))?$`)
+var nameDateRe = regexp.MustCompile(`^(\d{1,2})(?:er|st|nd|rd|th)? ([a-z]+)\.?(?: (\d{4}))?$`)
+var monthFirstRe = regexp.MustCompile(`^([a-z]+)\.? (\d{1,2})(?:st|nd|rd|th)?,?(?: (\d{4}))?$`)
 
 // calendarDate builds a date; without a year it takes the next occurrence
 // from today on.
@@ -319,18 +376,23 @@ func datePart(f string, now time.Time) (time.Time, bool) {
 		return now.AddDate(0, 0, 2), true
 	case "hier", "yesterday":
 		return now.AddDate(0, 0, -1), true
-	case "semaine prochaine", "la semaine prochaine":
+	case "semaine prochaine", "la semaine prochaine", "next week":
 		return nextWeekday(now, time.Monday, false), true
-	case "mois prochain", "le mois prochain":
+	case "mois prochain", "le mois prochain", "next month":
 		return time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, now.Location()), true
-	case "fin du mois", "fin de mois":
+	case "fin du mois", "fin de mois", "end of month", "end of the month":
 		return time.Date(now.Year(), now.Month()+1, 0, 0, 0, 0, 0, now.Location()), true
 	}
 	words := strings.Fields(strings.ReplaceAll(f, ".", ""))
 	if len(words) > 0 {
 		this := false
-		if words[0] == "ce" {
+		switch words[0] {
+		case "ce", "this":
 			this, words = true, words[1:]
+		case "next":
+			if len(words) == 2 {
+				words = []string{words[1], "prochain"}
+			}
 		}
 		if len(words) > 0 {
 			if wd, ok := weekdayNames[words[0]]; ok {
@@ -363,6 +425,16 @@ func datePart(f string, now time.Time) (time.Time, bool) {
 			return time.Time{}, false
 		}
 		return calendarDate(now, d, time.Month(mo), year, hasYear)
+	}
+	if m := monthFirstRe.FindStringSubmatch(f); m != nil {
+		if mo, ok := monthNames[m[1]]; ok {
+			d, _ := strconv.Atoi(m[2])
+			year, hasYear := 0, m[3] != ""
+			if hasYear {
+				year, _ = strconv.Atoi(m[3])
+			}
+			return calendarDate(now, d, mo, year, hasYear)
+		}
 	}
 	if m := nameDateRe.FindStringSubmatch(f); m != nil {
 		mo, ok := monthNames[m[2]]
@@ -412,7 +484,7 @@ func Parse(s string, now time.Time) (Moment, error) {
 		}
 	}
 	f := fold(raw)
-	if c, err := ParseClock(strings.TrimPrefix(f, "a ")); err == nil {
+	if c, err := ParseClock(strings.TrimPrefix(strings.TrimPrefix(f, "a "), "at ")); err == nil {
 		t, _ := time.ParseInLocation("2006-01-02 15:04", now.Format("2006-01-02")+" "+c, now.Location())
 		if t.Before(now) {
 			t = t.AddDate(0, 0, 1)
@@ -427,7 +499,7 @@ func Parse(s string, now time.Time) (Moment, error) {
 		if c, err := ParseClock(words[len(words)-1]); err == nil {
 			clock = c
 			words = words[:len(words)-1]
-			if n := len(words); words[n-1] == "a" {
+			if n := len(words); words[n-1] == "a" || words[n-1] == "at" {
 				words = words[:n-1]
 			}
 			datePhrase = strings.Join(words, " ")
@@ -438,7 +510,7 @@ func Parse(s string, now time.Time) (Moment, error) {
 	}
 	t, ok := datePart(datePhrase, now)
 	if !ok {
-		return Moment{}, fmt.Errorf("date %q illisible : essayez demain, vendredi, 12.11, 12 novembre, +3j ou 2026-11-12", raw)
+		return Moment{}, fmt.Errorf(tr("date %q illisible : essayez demain, vendredi, 12.11, 12 novembre, +3j ou 2026-11-12", "date %q unreadable: try tomorrow, friday, 12.11, 12 november, +3d or 2026-11-12"), raw)
 	}
 	if clock != "" {
 		return Moment{Date: t.Format("2006-01-02"), Clock: clock}, nil
@@ -469,8 +541,11 @@ func Horizon(s string, now time.Time, defaultClock string) (time.Time, error) {
 
 var weekdays = []string{"dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."}
 
-// Day renders a date as « mar. 06.10.2026 ».
+// Day renders a date as « mar. 06.10.2026 » (« Tue 06.10.2026 » in English).
 func Day(t time.Time) string {
+	if lang == English {
+		return t.Format("Mon 02.01.2006")
+	}
 	return weekdays[t.Weekday()] + " " + t.Format("02.01.2006")
 }
 
@@ -484,15 +559,15 @@ func Until(t, now time.Time) string {
 	days := int(b.Sub(a).Hours() / 24)
 	switch {
 	case days == 0:
-		return "aujourd'hui"
+		return tr("aujourd'hui", "today")
 	case days == 1:
-		return "demain"
+		return tr("demain", "tomorrow")
 	case days == -1:
-		return "hier"
+		return tr("hier", "yesterday")
 	case days > 1:
-		return fmt.Sprintf("dans %d jours", days)
+		return fmt.Sprintf(tr("dans %d jours", "in %d days"), days)
 	default:
-		return fmt.Sprintf("il y a %d jours", -days)
+		return fmt.Sprintf(tr("il y a %d jours", "%d days ago"), -days)
 	}
 }
 

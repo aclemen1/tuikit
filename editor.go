@@ -158,7 +158,7 @@ func (e *Editor) Submit() (Values, bool) {
 func (e *Editor) Changed() bool { return e.area.value() != e.initial }
 
 func (e *Editor) Keys() string {
-	return "entrée nouvelle ligne · ctrl+s valider · esc annuler"
+	return tr("entrée nouvelle ligne · ctrl+s valider · esc annuler", "enter new line · ctrl+s save · esc cancel")
 }
 
 // Text is the current text.

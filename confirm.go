@@ -59,7 +59,7 @@ func (c *Confirm) Update(msg tea.Msg) (Action, tea.Cmd) {
 }
 
 func (c *Confirm) View() string {
-	oui, non := "  Oui  ", "  Non  "
+	oui, non := tr("  Oui  ", "  Yes  "), tr("  Non  ", "  No  ")
 	if c.yes {
 		oui, non = sReverse.Foreground(cAccent).Render(oui), sDim.Render(non)
 	} else {
@@ -75,7 +75,7 @@ func (c *Confirm) View() string {
 func (c *Confirm) Submit() (Values, bool) { return Values{}, c.yes }
 
 func (c *Confirm) Keys() string {
-	return "←→ ou o/n choisir · entrée valider · esc annuler"
+	return tr("←→ ou o/n choisir · entrée valider · esc annuler", "←→ or y/n choose · enter confirm · esc cancel")
 }
 
 // ConfirmTyped guards a destructive action: the id must be typed back before
@@ -118,7 +118,7 @@ func (c *ConfirmTyped) View() string {
 	lines := []string{
 		lipgloss.NewStyle().Width(c.width).Render(c.question),
 		"",
-		"Recopiez " + sBold.Render(c.expected) + " pour confirmer :",
+		tr("Recopiez ", "Type ") + sBold.Render(c.expected) + tr(" pour confirmer :", " to confirm:"),
 		c.in.View(),
 	}
 	if c.err != "" {
@@ -129,13 +129,15 @@ func (c *ConfirmTyped) View() string {
 
 func (c *ConfirmTyped) Submit() (Values, bool) {
 	if strings.TrimSpace(c.in.Value()) != c.expected {
-		c.err = "ne correspond pas à " + c.expected
+		c.err = tr("ne correspond pas à ", "does not match ") + c.expected
 		return Values{}, false
 	}
 	return Values{}, true
 }
 
-func (c *ConfirmTyped) Keys() string { return "entrée confirmer · esc annuler" }
+func (c *ConfirmTyped) Keys() string {
+	return tr("entrée confirmer · esc annuler", "enter confirm · esc cancel")
+}
 
 // newInput is a one-line editor without blink: arrows, word moves, ctrl+a,
 // ctrl+e, ctrl+w, ctrl+k, ctrl+u, and paste.

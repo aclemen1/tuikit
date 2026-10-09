@@ -20,6 +20,7 @@ type value struct {
 	duration  time.Duration
 	durations []time.Duration
 	strings   []string
+	none      bool
 }
 
 func (v Values) get(id string) value {
@@ -65,6 +66,9 @@ func (v Values) Duration(id string) time.Duration { return v.get(id).duration }
 
 // Durations is the value of a Durations field.
 func (v Values) Durations(id string) []time.Duration { return v.get(id).durations }
+
+// None tells that a Date with AllowNone was given as none.
+func (v Values) None(id string) bool { return v.get(id).none }
 
 // Strings are the values of a Refs field.
 func (v Values) Strings(id string) []string { return v.get(id).strings }

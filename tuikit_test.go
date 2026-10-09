@@ -560,3 +560,55 @@ func TestRequiredLabelKeepsGap(t *testing.T) {
 		t.Fatalf("no gap after the label:\n%s", h.view())
 	}
 }
+
+func TestEnglish(t *testing.T) {
+	SetLanguage(English)
+	defer SetLanguage(French)
+	f := NewForm("f", Date("d", "Date").Clock("09:00").Required(), Bool("s", "Secret")).Now(fixedNow)
+	h := open(t, "x", f)
+	h.press("ctrl+s")
+	v := h.view()
+	for _, want := range []string{"! required", "October 2026", "mo tu we th fr sa su", "[ ] no", "tab next field · ctrl+s save · esc cancel"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("no %q in:\n%s", want, v)
+		}
+	}
+	h.typ("next friday")
+	if !strings.Contains(h.view(), "→ Fri 16.10.2026 (09:00) · in 7 days") {
+		t.Errorf("no English reading:\n%s", h.view())
+	}
+	h.press("esc")
+	if v := h.view(); !strings.Contains(v, "Discard your input?") || !strings.Contains(v, "Yes") {
+		t.Errorf("no English question:\n%s", v)
+	}
+	h.typ("y")
+	h.press("enter")
+	if !h.canceled() {
+		t.Error("y did not answer Yes")
+	}
+}
+
+func TestDateAllowNone(t *testing.T) {
+	f := NewForm("w", Text("who", "Sur qui"), Date("until", "Échéance").AllowNone().Required()).Now(fixedNow)
+	h := open(t, "Attente", f)
+	h.press("tab")
+	h.typ("Jamais")
+	if !strings.Contains(h.view(), "→ aucune échéance") {
+		t.Fatalf("no reading:\n%s", h.view())
+	}
+	h.press("ctrl+s")
+	v := h.done().Values
+	if !v.None("until") || v.String("until") != "none" {
+		t.Fatalf("None = %v, String = %q", v.None("until"), v.String("until"))
+	}
+	if _, ok := v.Moment("until"); ok {
+		t.Fatal("none has a moment")
+	}
+	g := NewForm("w", Date("d", "Date")).Now(fixedNow)
+	h = open(t, "x", g)
+	h.typ("aucune")
+	h.press("ctrl+s")
+	if !h.m.Open() {
+		t.Fatal("aucune accepted without AllowNone")
+	}
+}

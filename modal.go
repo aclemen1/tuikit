@@ -140,7 +140,7 @@ func (m *Modal) Update(msg tea.Msg) tea.Cmd {
 			return m.submit()
 		case "esc", "ctrl+c":
 			if m.content.Changed() {
-				m.quit = NewConfirm("", "Abandonner la saisie ?")
+				m.quit = NewConfirm("", tr("Abandonner la saisie ?", "Discard your input?"))
 				m.quit.Resize(m.boxWidth()-4, 3)
 				return nil
 			}

@@ -196,7 +196,7 @@ func (f *Form) check() (Values, int) {
 		case err != nil:
 			errs[x.id] = err.Error()
 		case !has && x.required:
-			errs[x.id] = "obligatoire"
+			errs[x.id] = tr("obligatoire", "required")
 		case has:
 			v.set(x.id, val)
 		}
@@ -240,7 +240,7 @@ func (f *Form) snapshot() string {
 func (f *Form) Changed() bool { return f.snapshot() != f.initial }
 
 func (f *Form) Keys() string {
-	k := "tab champ suivant · ctrl+s valider · esc annuler"
+	k := tr("tab champ suivant · ctrl+s valider · esc annuler", "tab next field · ctrl+s save · esc cancel")
 	if x := f.current(); x != nil {
 		k = x.keys() + " · " + k
 	}
@@ -266,9 +266,9 @@ func (f *Form) fieldLines(x *Field, focused bool, now time.Time) []string {
 	case x.kind == kChoice:
 		lines = append(lines, x.choiceView(focused))
 	case x.kind == kBool:
-		box := "[ ] non"
+		box := tr("[ ] non", "[ ] no")
 		if x.on {
-			box = "[x] oui"
+			box = tr("[x] oui", "[x] yes")
 		}
 		if focused {
 			box = sChosen.Render(box)
@@ -316,6 +316,9 @@ func (f *Form) reading(x *Field, now time.Time) string {
 	}
 	switch x.kind {
 	case kDate:
+		if v.none {
+			return tr("aucune échéance", "no date")
+		}
 		return when.Describe(v.moment, now, x.clock)
 	case kClock:
 		return v.raw
@@ -362,6 +365,13 @@ func (x *Field) choiceView(focused bool) string {
 
 var monthsFR = []string{"", "janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"}
 
+func monthName(m time.Month) string {
+	if lang == English {
+		return m.String()
+	}
+	return monthsFR[m]
+}
+
 // calendar draws the month of the date a Date field reads, or of today; the
 // date is reversed, today underlined.
 func calendar(x *Field, now time.Time) []string {
@@ -374,7 +384,7 @@ func calendar(x *Field, now time.Time) []string {
 		shown = now
 	}
 	first := time.Date(shown.Year(), shown.Month(), 1, 0, 0, 0, 0, now.Location())
-	lines := []string{sDim.Render(fmt.Sprintf("%s %d", monthsFR[shown.Month()], shown.Year())), sDim.Render("lu ma me je ve sa di")}
+	lines := []string{sDim.Render(fmt.Sprintf("%s %d", monthName(shown.Month()), shown.Year())), sDim.Render(tr("lu ma me je ve sa di", "mo tu we th fr sa su"))}
 	offset := (int(first.Weekday()) + 6) % 7
 	row := strings.Repeat("   ", offset)
 	days := first.AddDate(0, 1, -1).Day()

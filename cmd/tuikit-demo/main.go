@@ -113,6 +113,9 @@ func (m model) View() tea.View {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "-en" {
+		tuikit.SetLanguage(tuikit.English)
+	}
 	if _, err := tea.NewProgram(model{width: 80, height: 24}).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

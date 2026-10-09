@@ -73,7 +73,8 @@ func (m model) View() tea.View {
 
 Modificateurs : `.Required()`, `.Help(s)`, `.Placeholder(s)`, `.Default(v)`
 (string, bool, time.Time, when.Moment, time.Duration, []time.Duration, []string),
-`.Clock("09:00")` (heure d'une date seule), `.From(idDate)` (aperçu des dates
+`.Clock("09:00")` (heure d'une date seule), `.AllowNone()` (une Date accepte
+« aucune », « jamais », « none » : `Values.None(id)`, `String` = « none »), `.From(idDate)` (aperçu des dates
 d'un préavis), `.ShowIf(id, valeurs...)`, `.Strict()` (Ref limitée aux
 propositions). Un `Refs` obligatoire exige au moins une valeur. Formulaire : `.Validate(func(Values) Errors)`, `.Now(func() time.Time)`.
 
@@ -99,6 +100,20 @@ m.modal = tuikit.NewModal("Nouvelle échéance", form).SetSize(m.width, m.height
 //   msg.Values.String("sphere"), msg.Values.Time("due"), msg.Values.Durations("notice")
 ```
 
+## Langue
+
+Les textes de tuikit (question d'abandon, Oui/Non, aides, erreurs, lecture des
+dates, calendrier) sont en français par défaut. Une TUI en anglais appelle une
+fois, au démarrage :
+
+```go
+tuikit.SetLanguage(tuikit.English) // règle aussi when
+```
+
+La saisie des dates accepte le français et l'anglais quelle que soit la langue
+(« demain 14h », « tomorrow at 3pm », « next friday », « in 2 weeks »,
+« Nov 12 »). `Values.String` d'un `Bool` reste « oui » ou « non ».
+
 ## when
 
 `github.com/aclemen1/tuikit/when` lit les dates, heures et durées :
@@ -123,5 +138,5 @@ passée ; « 2h » seul est une heure (02:00), un délai s'écrit « +2h » ou
 ## Démo
 
 ```
-go run github.com/aclemen1/tuikit/cmd/tuikit-demo@latest
+go run github.com/aclemen1/tuikit/cmd/tuikit-demo@latest      # -en : en anglais
 ```

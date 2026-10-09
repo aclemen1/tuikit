@@ -40,7 +40,7 @@ const maxSuggestions = 6
 type Field struct {
 	id, label, help, placeholder string
 	kind                         kind
-	required, strict             bool
+	required, strict, allowNone  bool
 	options                      []string
 	clock                        string
 	from                         string
@@ -132,6 +132,12 @@ func (f *Field) Clock(defaultClock string) *Field { f.clock = defaultClock; retu
 // From previews the dates of a Durations list counted back from the Date
 // field dateID.
 func (f *Field) From(dateID string) *Field { f.from = dateID; return f }
+
+// AllowNone lets a Date say there is none: « aucune », « jamais », « none »,
+// « never ». Values.None tells it, and Values.String reads « none ».
+func (f *Field) AllowNone() *Field { f.allowNone = true; return f }
+
+var noneWords = []string{"aucune", "aucun", "jamais", "none", "never"}
 
 // Strict refuses a Ref value the completer does not propose.
 func (f *Field) Strict() *Field { f.strict = true; return f }
@@ -266,6 +272,9 @@ func (f *Field) parse(now time.Time) (v value, has bool, err error) {
 	}
 	switch f.kind {
 	case kDate:
+		if f.allowNone && slices.Contains(noneWords, strings.ToLower(raw)) {
+			return value{raw: "none", none: true}, true, nil
+		}
 		m, err := when.Parse(raw, now)
 		if err != nil {
 			return value{}, false, err
@@ -295,14 +304,14 @@ func (f *Field) parse(now time.Time) (v value, has bool, err error) {
 		return value{raw: strings.Join(parts, ","), durations: ds}, true, nil
 	case kRef:
 		if f.strict && !f.proposes(raw) {
-			return value{}, false, fmt.Errorf("%q n'est pas proposé", raw)
+			return value{}, false, fmt.Errorf(tr("%q n'est pas proposé", "%q is not offered"), raw)
 		}
 	case kRefs:
 		all := strings.Split(raw, ", ")
 		if f.strict {
 			for _, x := range all {
 				if !f.proposes(x) {
-					return value{}, false, fmt.Errorf("%q n'est pas proposé", x)
+					return value{}, false, fmt.Errorf(tr("%q n'est pas proposé", "%q is not offered"), x)
 				}
 			}
 		}
@@ -525,17 +534,17 @@ func foldText(s string) string { return foldTextReplacer.Replace(strings.ToLower
 func (f *Field) keys() string {
 	switch f.kind {
 	case kTextArea:
-		return "entrée nouvelle ligne"
+		return tr("entrée nouvelle ligne", "enter new line")
 	case kDate:
-		return "ctrl+flèches jour/semaine · pgup/pgdn mois"
+		return tr("ctrl+flèches jour/semaine · pgup/pgdn mois", "ctrl+arrows day/week · pgup/pgdn month")
 	case kChoice:
-		return "←→ choisir"
+		return tr("←→ choisir", "←→ choose")
 	case kBool:
-		return "espace cocher"
+		return tr("espace cocher", "space toggle")
 	case kRef:
-		return "↑↓ suggestions · entrée choisir"
+		return tr("↑↓ suggestions · entrée choisir", "↑↓ suggestions · enter pick")
 	case kRefs:
-		return "↑↓ suggestions · entrée ou virgule ajouter · ⌫ retirer"
+		return tr("↑↓ suggestions · entrée ou virgule ajouter · ⌫ retirer", "↑↓ suggestions · enter or comma add · ⌫ remove")
 	}
-	return "entrée suivant"
+	return tr("entrée suivant", "enter next")
 }
