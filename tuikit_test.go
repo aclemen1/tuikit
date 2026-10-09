@@ -612,3 +612,58 @@ func TestDateAllowNone(t *testing.T) {
 		t.Fatal("aucune accepted without AllowNone")
 	}
 }
+
+func pickList() *List {
+	return NewList("pick", []Item{
+		{Value: "new", Label: "+ nouveau"},
+		{Value: "note:PN-0001", Label: "Appeler la gérance"},
+		{Value: "task:PT-0007", Label: "Relancer le notaire"},
+		{Value: "guard:PG-0002", Label: "Jamais signer sans relire"},
+	})
+}
+
+func TestListPick(t *testing.T) {
+	h := open(t, "Notes", pickList())
+	if !strings.Contains(h.view(), "› + nouveau") {
+		t.Fatalf("first item not selected:\n%s", h.view())
+	}
+	h.press("down")
+	h.typ("j")
+	h.typ("k")
+	h.press("enter")
+	if got := h.done().Values.String("pick"); got != "note:PN-0001" {
+		t.Fatalf("picked %q", got)
+	}
+}
+
+func TestListFilter(t *testing.T) {
+	h := open(t, "Notes", pickList().Default("guard:PG-0002"))
+	h.typ("/notai")
+	v := h.view()
+	if !strings.Contains(v, "› Relancer le notaire") || strings.Contains(v, "gérance") {
+		t.Fatalf("filter failed:\n%s", v)
+	}
+	for range 6 {
+		h.press("backspace")
+	}
+	if h.m.Content().(*List).filtering {
+		t.Fatal("backspace on an empty filter did not close it")
+	}
+	h.typ("/zzz")
+	h.press("enter")
+	if !h.m.Open() {
+		t.Fatal("enter picked in an empty list")
+	}
+	h.press("esc")
+	if !h.canceled() {
+		t.Fatal("esc did not cancel")
+	}
+}
+
+func TestValuesSet(t *testing.T) {
+	var v Values
+	v.Set("x", "abc")
+	if !v.Has("x") || v.String("x") != "abc" {
+		t.Fatal("Set did not record")
+	}
+}

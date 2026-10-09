@@ -55,6 +55,10 @@ func (m model) View() tea.View {
 | `NewEditor(id, libellé, texte)` | texte libre plein cadre | `Values.String(id)` |
 | `NewConfirm(id, question)` | Oui/Non (flèches ou o/n, entrée), Non d'abord ; `.Default(true)` | `DoneMsg` = Oui, `CancelMsg` = Non |
 | `NewConfirmTyped(id, question, attendu)` | id à recopier | `DoneMsg` si recopié |
+| `NewList(id, items)` | liste verticale : ↑↓ ou j/k, `/` filtre, entrée choisit ; `.Default(valeur)` | `Values.String(id)` = `Item.Value` |
+
+Un contenu écrit hors de tuikit implémente `Content` et rend sa réponse par
+`var v tuikit.Values; v.Set(id, valeur)`.
 
 ## Champs
 

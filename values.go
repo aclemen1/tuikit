@@ -37,6 +37,10 @@ func (v *Values) set(id string, x value) {
 	v.m[id] = x
 }
 
+// Set records a text answer under id, for a Content written outside tuikit;
+// it reads back with String.
+func (v *Values) Set(id, s string) { v.set(id, value{raw: s}) }
+
 // Has tells whether the field has a value.
 func (v Values) Has(id string) bool {
 	_, ok := v.m[id]
