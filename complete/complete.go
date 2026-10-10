@@ -332,24 +332,95 @@ func File() string {
 // Lookup reads the source name from the shared file; change its Prefix
 // before New to insert another form (no prefix in a « to whom » field).
 func Lookup(name string) (Source, error) {
-	data, err := os.ReadFile(File())
+	all, err := sharedSources()
 	if err != nil {
 		return Source{}, err
 	}
-	var f struct {
-		Sources map[string]Source `yaml:"sources"`
-	}
-	if err := yaml.Unmarshal(data, &f); err != nil {
-		return Source{}, fmt.Errorf("%s : %w", File(), err)
-	}
-	s, ok := f.Sources[name]
+	s, ok := all[name]
 	if !ok {
 		return Source{}, fmt.Errorf("%s : pas de source %q", File(), name)
 	}
 	return s, nil
 }
 
-// Load builds a completer on sources named in the shared file.
+// Use names a source of the shared file in a tool's configuration, with
+// its own prefix when Prefix is set (an empty string inserts the bare value).
+// In YAML or JSON it is a name, or {source: office, prefix: ""}.
+type Use struct {
+	Source string  `yaml:"source" json:"source"`
+	Prefix *string `yaml:"prefix,omitempty" json:"prefix,omitempty"`
+}
+
+// Uses are the sources of one field: complete: {refs: [office, contact]}.
+type Uses []Use
+
+func (u *Use) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind == yaml.ScalarNode {
+		u.Source = n.Value
+		return nil
+	}
+	type plain Use
+	return n.Decode((*plain)(u))
+}
+
+func (u *Use) UnmarshalJSON(b []byte) error {
+	var name string
+	if json.Unmarshal(b, &name) == nil {
+		u.Source = name
+		return nil
+	}
+	type plain Use
+	return json.Unmarshal(b, (*plain)(u))
+}
+
+// sharedSources reads every source of the shared file.
+func sharedSources() (map[string]Source, error) {
+	data, err := os.ReadFile(File())
+	if err != nil {
+		return nil, err
+	}
+	var f struct {
+		Sources map[string]Source `yaml:"sources"`
+	}
+	if err := yaml.Unmarshal(data, &f); err != nil {
+		return nil, fmt.Errorf("%s : %w", File(), err)
+	}
+	return f.Sources, nil
+}
+
+// FromConfig builds a completer on the sources a tool's configuration names,
+// and lists those missing from the shared file instead of failing: the TUI
+// shows them and keeps the others. An unreadable file makes every source
+// missing.
+func FromConfig(uses Uses) (*Completer, []string) {
+	all, _ := sharedSources()
+	var sources []Source
+	var missing []string
+	for _, u := range uses {
+		s, ok := all[u.Source]
+		if !ok {
+			missing = append(missing, u.Source)
+			continue
+		}
+		if u.Prefix != nil {
+			s.Prefix = *u.Prefix
+		}
+		sources = append(sources, s)
+	}
+	return New(sources...), missing
+}
+
+// LoadNames is FromConfig for names alone.
+func LoadNames(names []string) (*Completer, []string) {
+	uses := make(Uses, len(names))
+	for i, n := range names {
+		uses[i] = Use{Source: n}
+	}
+	return FromConfig(uses)
+}
+
+// Load builds a completer on sources named in the shared file; it fails on
+// the first missing one, where FromConfig and LoadNames go on.
 func Load(names ...string) (*Completer, error) {
 	var sources []Source
 	for _, n := range names {

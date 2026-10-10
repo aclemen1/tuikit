@@ -140,8 +140,35 @@ tuikit.Ref("to", "À", complete.New(s).Complete)
 | Ordre | valeur exacte, puis valeur ou champ match commençant par la saisie, puis le reste |
 | Échec | une commande en échec ne propose rien ; `c.Err()` dit pourquoi |
 
-`complete.Source` porte des tags yaml et json : un outil peut aussi la lire de
-sa propre configuration et appeler `complete.New(sources...)`.
+### Configuration d'un outil
+
+Chaque outil liste ses sources par champ, sous la clé `complete:`, avec les noms
+de `refs.yaml`. Il ne nomme aucune source dans son code.
+
+```yaml
+complete:
+  refs: [office, contact, task, due, note, guard, oj]
+  to: [{source: office, prefix: ""}]   # « À » de task : l'id seul
+  people: [contact]
+```
+
+Une entrée est un nom, ou `{source, prefix}` pour changer le préfixe inséré.
+
+```go
+type Config struct {
+	Complete map[string]complete.Uses `yaml:"complete"`
+}
+
+c, missing := complete.FromConfig(cfg.Complete["refs"])
+// missing : noms absents de refs.yaml ; les autres sources marchent
+tuikit.Refs("refs", "Réfs", c.Complete)
+```
+
+`complete.LoadNames(noms)` fait de même pour des noms seuls. `complete.Load`
+échoue au premier nom absent ; `FromConfig` et `LoadNames` continuent.
+
+`complete.Source` porte des tags yaml et json : un outil peut aussi déclarer une
+source complète et appeler `complete.New(sources...)`.
 
 ## Langue
 

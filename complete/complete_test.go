@@ -1,11 +1,14 @@
 package complete
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/aclemen1/tuikit"
 )
@@ -221,5 +224,50 @@ func TestLabelOnOneLine(t *testing.T) {
 	c := ready(t, Source{Run: echo(`[{"id":"PN-1","body":"ligne 1\n\n- ligne 2"}]`), Value: "id", Label: "body"})
 	if got := c.Complete("PN-1")[0].Label; got != "ligne 1 - ligne 2" {
 		t.Fatalf("label = %q", got)
+	}
+}
+
+func TestFromConfig(t *testing.T) {
+	dir := t.TempDir()
+	data := filepath.Join(dir, "dossiers.json")
+	if err := os.WriteFile(data, []byte(dossiersJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	refs := filepath.Join(dir, "refs.yaml")
+	shared := "sources:\n  office:\n    run: [cat, \"" + data + "\"]\n    prefix: \"office:\"\n    value: id\n    label: title\n    match: [alias]\n"
+	if err := os.WriteFile(refs, []byte(shared), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TUIKIT_REFS", refs)
+	var cfg struct {
+		Complete map[string]Uses `yaml:"complete"`
+	}
+	tool := "complete:\n  refs: [office, absent]\n  to: [{source: office, prefix: \"\"}]\n"
+	if err := yaml.Unmarshal([]byte(tool), &cfg); err != nil {
+		t.Fatal(err)
+	}
+	c, missing := FromConfig(cfg.Complete["refs"])
+	if len(missing) != 1 || missing[0] != "absent" {
+		t.Fatalf("missing = %v", missing)
+	}
+	c.Wait(5 * time.Second)
+	if got := values(c.Complete("maman")); len(got) != 1 || got[0] != "office:P-0024" {
+		t.Fatalf("refs = %v", got)
+	}
+	to, missing := FromConfig(cfg.Complete["to"])
+	to.Wait(5 * time.Second)
+	if got := values(to.Complete("maman")); len(missing) != 0 || len(got) != 1 || got[0] != "P-0024" {
+		t.Fatalf("to = %v, missing %v", got, missing)
+	}
+	var js Uses
+	if err := json.Unmarshal([]byte(`["office", {"source": "office", "prefix": ""}]`), &js); err != nil || js[0].Source != "office" || js[1].Prefix == nil || *js[1].Prefix != "" {
+		t.Fatalf("JSON uses = %+v, %v", js, err)
+	}
+	if _, missing := LoadNames([]string{"office", "x", "y"}); strings.Join(missing, ",") != "x,y" {
+		t.Fatalf("LoadNames missing = %v", missing)
+	}
+	t.Setenv("TUIKIT_REFS", filepath.Join(dir, "none.yaml"))
+	if c, missing := LoadNames([]string{"office"}); len(missing) != 1 || len(c.Complete("")) != 0 {
+		t.Fatal("unreadable file did not make every source missing")
 	}
 }
