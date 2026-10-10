@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/aclemen1/tuikit"
+	refs "github.com/aclemen1/tuikit/complete"
 )
 
 var dossiers = []tuikit.Item{
@@ -18,7 +19,15 @@ var dossiers = []tuikit.Item{
 	{Value: "PT-0007", Label: "Relancer la gérance"},
 }
 
-func complete(q string) []tuikit.Item {
+// complete uses the shared refs file when there is one, else a fixed list.
+var complete = func() tuikit.Completer {
+	if c, err := refs.Load("office", "contact", "task"); err == nil {
+		return c.Complete
+	}
+	return completeFixed
+}()
+
+func completeFixed(q string) []tuikit.Item {
 	var out []tuikit.Item
 	for _, it := range dossiers {
 		if strings.Contains(strings.ToLower(it.Value+" "+it.Label), strings.ToLower(q)) {

@@ -104,6 +104,45 @@ m.modal = tuikit.NewModal("Nouvelle échéance", form).SetSize(m.width, m.height
 //   msg.Values.String("sphere"), msg.Values.Time("due"), msg.Values.Durations("notice")
 ```
 
+## Complétion des références
+
+`github.com/aclemen1/tuikit/complete` propose les références à `Ref` et
+`Refs` à partir de sources déclarées une fois dans `~/.config/tuikit/refs.yaml`
+(ou `$TUIKIT_REFS`, ou `$XDG_CONFIG_HOME/tuikit/refs.yaml`) :
+
+```yaml
+sources:
+  office:
+    run: [office, ls, --status, all, --format, json]
+    prefix: "office:"
+    value: id
+    label: title
+    match: [alias, title]    # champs cherchés en plus ; une liste élément par élément
+  fixed:
+    static:
+      - {value: desk, label: le desk}
+```
+
+```go
+c, err := complete.Load("office", "contact")      // sources nommées du fichier
+tuikit.Refs("refs", "Réfs", c.Complete)
+
+s, _ := complete.Lookup("office")                  // même source, sans préfixe
+s.Prefix = ""
+tuikit.Ref("to", "À", complete.New(s).Complete)
+```
+
+| Règle | Effet |
+|---|---|
+| JSON lu | `{ok, result: [...]}`, `{ok, result: {items: [...]}}` ou `[...]` |
+| Commandes | lancées par `New` en arrière-plan, cache de 5 min (`complete.TTL`) partagé dans le processus ; la frappe n'attend jamais |
+| Recherche | chaque mot tapé dans value, label ou match, sans casse ni accents ; le préfixe peut être tapé (`office:P-00`) ; un autre préfixe écarte la source |
+| Ordre | valeur exacte, puis valeur ou champ match commençant par la saisie, puis le reste |
+| Échec | une commande en échec ne propose rien ; `c.Err()` dit pourquoi |
+
+`complete.Source` porte des tags yaml et json : un outil peut aussi la lire de
+sa propre configuration et appeler `complete.New(sources...)`.
+
 ## Langue
 
 Les textes de tuikit (question d'abandon, Oui/Non, aides, erreurs, lecture des
