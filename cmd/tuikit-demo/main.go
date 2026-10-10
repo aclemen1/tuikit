@@ -2,9 +2,11 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -38,6 +40,7 @@ func completeFixed(q string) []tuikit.Item {
 }
 
 type model struct {
+	busy          *tuikit.Busy
 	modal         *tuikit.Modal
 	width, height int
 	log           []string
@@ -46,6 +49,9 @@ type model struct {
 func (m model) Init() tea.Cmd { return tea.RequestBackgroundColor }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if cmd, ok := m.busy.Update(msg); ok {
+		return m, cmd
+	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -69,6 +75,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch k.String() {
 	case "q":
 		return m, tea.Quit
+	case "w":
+		return m, m.busy.Run("relecture task", func() (string, error) {
+			time.Sleep(2 * time.Second)
+			return "83 tâches relues", nil
+		})
+	case "f":
+		return m, m.busy.Run("confier PT-0012", func() (string, error) {
+			time.Sleep(time.Second)
+			return "", errors.New("office: dossier P-9999 inconnu")
+		})
+	case tuikit.BusyKey:
+		m.modal = tuikit.NewModal("Travaux", m.busy.List())
 	case "c":
 		c = tuikit.NewForm("echeance",
 			tuikit.Choice("sphere", "Sphère", "perso", "pro").Required(),
@@ -118,8 +136,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() tea.View {
-	lines := []string{"tuikit-demo : c échéance · n dossier · r note · l liste · e éditeur · o Oui/Non · d suppression · q quitter", ""}
+	lines := []string{"tuikit-demo : w travail · f échec · ! travaux · c échéance · n dossier · r note · l liste · e éditeur · o Oui/Non · d suppression · q quitter", ""}
 	lines = append(lines, m.log...)
+	for len(lines) < m.height-1 {
+		lines = append(lines, "")
+	}
+	lines = append(lines, m.busy.View())
 	v := tea.NewView(tuikit.Overlay(strings.Join(lines, "\n"), m.modal, m.width, m.height))
 	v.AltScreen = true
 	return v
@@ -129,7 +151,7 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "-en" {
 		tuikit.SetLanguage(tuikit.English)
 	}
-	if _, err := tea.NewProgram(model{width: 80, height: 24}).Run(); err != nil {
+	if _, err := tea.NewProgram(model{busy: tuikit.NewBusy(), width: 80, height: 24}).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

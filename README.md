@@ -170,6 +170,42 @@ tuikit.Refs("refs", "Réfs", c.Complete)
 `complete.Source` porte des tags yaml et json : un outil peut aussi déclarer une
 source complète et appeler `complete.New(sources...)`.
 
+## Travaux de fond
+
+`tuikit.Busy` montre les travaux de fond d'une TUI : un spinner pendant qu'un
+travail tourne, la fin quelques secondes, un échec en rouge jusqu'à ce qu'on
+ouvre la liste. Sans travail ni message à montrer, il n'anime rien.
+
+```go
+m.busy = tuikit.NewBusy()
+
+cmd := m.busy.Run("confier PT-0012", func() (string, error) {
+	return "confiée à P-0019", confier()   // texte de fin, ou erreur
+})
+cmd := m.busy.Wrap("relecture task", reloadCmd) // son message suit ; une error est un échec
+
+// Update, avant tout le reste :
+if cmd, ok := m.busy.Update(msg); ok {
+	return m, cmd
+}
+// touche commune tuikit.BusyKey (« ! ») :
+m.modal = tuikit.NewModal("Travaux", m.busy.List()).SetSize(m.width, m.height)
+
+// View, en-tête ou barre d'état :
+m.busy.View()
+```
+
+| État | `View()` |
+|---|---|
+| un travail | `⠋ relecture task` |
+| plusieurs | `⠋ 2 en cours · confier PT-0012` (le plus ancien) |
+| fin | `✓ confiée à P-0019`, 4 s (`tuikit.DoneFor`) |
+| échec | `✗ confier PT-0012 : dossier inconnu` en rouge, `(+n)` s'il y en a d'autres, jusqu'à l'ouverture de la liste |
+| rien | chaîne vide |
+
+La liste garde les 50 derniers travaux : heure, durée, texte de fin ou erreur
+complète. `Running()` et `Unread()` donnent les compteurs.
+
 ## Langue
 
 Les textes de tuikit (question d'abandon, Oui/Non, aides, erreurs, lecture des
