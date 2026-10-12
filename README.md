@@ -206,6 +206,34 @@ m.busy.View()
 La liste garde les 50 derniers travaux : heure, durée, texte de fin ou erreur
 complète. `Running()` et `Unread()` donnent les compteurs.
 
+## Focus partagé
+
+`tuikit.Focus` écrit la sélection d'une TUI dans le fichier de focus commun,
+lu par les autres outils : `~/.local/state/office/focus.json`, ou `$OFFICE_FOCUS`.
+
+```go
+m.focus = tuikit.NewFocus("task")
+
+// à chaque changement de sélection :
+cmd := m.focus.Set("task:PT-0012", "Relancer le notaire", "perso")
+
+// Update, avant tout le reste :
+if cmd, ok := m.focus.Update(msg); ok {
+	return m, cmd
+}
+```
+
+```json
+{"ref":"task:PT-0012","title":"Relancer le notaire","tool":"task","sphere":"perso","at":"2026-10-12T10:00:00+02:00"}
+```
+
+| Règle | Effet |
+|---|---|
+| Anti-rebond | seule la dernière sélection après 300 ms (`tuikit.FocusDelay`) est écrite |
+| Même ref | aucune écriture, aucun tick ; une ref vide est ignorée |
+| Écriture | fichier temporaire puis renommage ; répertoire créé si besoin |
+| Échec | silencieux |
+
 ## Langue
 
 Les textes de tuikit (question d'abandon, Oui/Non, aides, erreurs, lecture des
