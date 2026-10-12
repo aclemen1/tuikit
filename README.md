@@ -1,3 +1,5 @@
+> **Ce dépôt est archivé.** Depuis le 12.10.2026, le code vit dans le monorepo privé `aclemen1/jarvis`, sous `tuikit/`. Ce dépôt ne reçoit plus de changements.
+
 # tuikit
 
 Composants de saisie communs aux TUI (office, artefact, oj, due, task, mnemo,
